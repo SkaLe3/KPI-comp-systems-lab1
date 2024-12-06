@@ -1,3 +1,4 @@
+/* Application.cpp */
 #include "Application.h"
 #include <print>
 #include <glad/glad.h>
@@ -41,6 +42,8 @@ namespace CSL1
 		ImGuiIO& io = ImGui::GetIO(); (void)io;
 		io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls	
 		io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
+		//io.FontDefault = io.Fonts->AddFontFromFileTTF(("Roboto/Roboto-Regular.ttf").c_str(), 16);
 
 		ImGui::StyleColorsDark();
 		ImGui_ImplGlfw_InitForOpenGL(m_Window, true);

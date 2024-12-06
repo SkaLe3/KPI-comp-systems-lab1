@@ -1,8 +1,10 @@
+/* Schedulers.h */
 #pragma once
 #include "Processor.h"
 #include "Task.h"
 
 #include <vector>
+#include <optional>
 
 namespace CSL1
 {
@@ -20,13 +22,17 @@ namespace CSL1
 		class Dedicated
 		{
 		public:
-			void Run(std::vector<Processor>& processors, std::vector<Task>& tasks, uint32_t timeLeft){}
+			void Run(std::vector<Processor>& processors, std::vector<Task>& tasks, uint32_t timeLeft);
+
 		};
 
 		class Interruptible
 		{
 		public:
-			void Run(std::vector<Processor>& processors, std::vector<Task>& tasks, uint32_t timeLeft){}
+			void Run(std::vector<Processor>& processors, std::vector<Task>& tasks, uint32_t timeLeft);
+
+		private:
+			Processor* FindFastest(std::vector<Processor>& processors);
 		};
 	}
 }

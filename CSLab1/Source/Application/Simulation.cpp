@@ -1,3 +1,4 @@
+/* Simulation.cpp */
 #include "Simulation.h"
 #include "TaskGenerator.h"
 #include "Schedulers.h"
@@ -118,7 +119,7 @@ namespace CSL1
 
 		uint32_t potentialOperations = 0;
 		for (auto& proc : m_Processors)
-			potentialOperations += (proc.GetPower() * m_ElapsedTime);
+			potentialOperations += (proc.GetPower() * m_ElapsedTime) - proc.Stats.WorkTimeScheduler;
 
 		float efficiency = static_cast<float>(completedOperations) / static_cast<float>(potentialOperations);
 

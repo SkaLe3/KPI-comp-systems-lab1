@@ -1,10 +1,11 @@
+/* Processor.cpp */
 #include "Processor.h"
 
 namespace CSL1
 {
 
 	Processor::Processor()
-		: m_ID(NextAvailableID), m_Power(1), m_LastScheduleTime(0)
+		: m_ID(NextAvailableID), m_Power(1), m_LastScheduleTime(0), m_bRunsScheduler(false), m_SchedulerUptime(0)
 	{
 		NextAvailableID++;
 		ResetStats();
@@ -41,6 +42,7 @@ namespace CSL1
 		return m_Queue.empty();
 	}
 
+
 	void Processor::AddTask(const Task& task)
 	{
 		m_Queue.push(task);
@@ -49,9 +51,12 @@ namespace CSL1
 
 	void Processor::Tick()
 	{
-		// if cheduler
-		// if not
-
+		if (m_bRunsScheduler)
+		{
+			Stats.WorkTimeScheduler++;
+			m_SchedulerUptime++;
+			return;
+		}
 		Stats.WorkTimeDedicated++;
 		if (!m_Queue.empty())
 		{
@@ -65,10 +70,33 @@ namespace CSL1
 		}
 	}
 
+	uint32_t Processor::GetSchedulerUptime() const
+	{
+		return m_SchedulerUptime;
+	}
+
+	void Processor::RunScheduler()
+	{
+		 m_bRunsScheduler = true;
+	}
+
+	void Processor::StopScheduler()
+	{
+		m_bRunsScheduler = false;
+		m_SchedulerUptime = 0;
+	}
+
+	bool Processor::IsSchedulerRunning() const
+	{
+		return m_bRunsScheduler;
+	}
+
+
 	void Processor::Reset()
 	{
 		ResetStats();
-		m_LastScheduleTime = 0;
+		m_LastScheduleTime = 0;	
+		m_bRunsScheduler = false;
 		m_Queue = std::queue<Task>();
 	}
 

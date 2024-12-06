@@ -1,3 +1,4 @@
+/* Processor.h */
 #pragma once
 
 #include "Task.h"
@@ -10,6 +11,7 @@ namespace CSL1
 		uint32_t CompletedOperations = 0;
 		uint32_t CompletedTasks = 0;
 		uint32_t WorkTimeDedicated = 0;
+		uint32_t WorkTimeScheduler = 0;
 	};
 
 	class Processor
@@ -28,6 +30,11 @@ namespace CSL1
 		void AddTask(const Task& task);
 		void Tick();
 
+		uint32_t GetSchedulerUptime() const;
+		void RunScheduler();
+		void StopScheduler();
+		bool IsSchedulerRunning() const ;
+
 		void Reset();
 	private:
 		void ResetStats();
@@ -41,6 +48,9 @@ namespace CSL1
 		std::queue<Task> m_Queue;
 		
 		uint32_t m_LastScheduleTime;
+
+		bool m_bRunsScheduler;
+		uint32_t m_SchedulerUptime;
 
 	private:
 		inline static int32_t NextAvailableID = 0;
