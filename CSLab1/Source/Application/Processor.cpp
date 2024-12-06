@@ -16,6 +16,7 @@ namespace CSL1
 		return m_ID;
 	}
 
+
 	const uint32_t Processor::GetPower() const
 	{
 		return m_Power;

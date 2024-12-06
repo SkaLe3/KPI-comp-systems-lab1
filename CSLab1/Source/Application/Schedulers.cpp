@@ -18,10 +18,27 @@ namespace CSL1
 				}
 				timeLeft--;
 			}
+			while (timeLeft > 0)
+			{
+				uint32_t procLeft = processors.size();
+				for (auto& processor : processors)
+				{
+					if (processor.IsQueueEmpty())
+					{
+						procLeft--;
+						continue;
+					}
+					processor.Tick();
+				}
+				timeLeft--;
+				if (procLeft == 0)
+					break;
+			}
 		}
 
 		bool FIFO::TryAddTask(std::vector<Processor>& processors, std::vector<Task>& tasks)
 		{
+			if (tasks.empty()) return false;
 			Task& currentTask = tasks.front();
 			Processor* processor = nullptr;
 			auto it = std::find_if(processors.begin(), processors.end(), [&currentTask](const Processor& proc)

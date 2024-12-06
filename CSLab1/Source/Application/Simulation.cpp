@@ -4,7 +4,6 @@
 
 #include <imgui.h>
 #include <string>
-#include <chrono>
 #include <thread>
 
 
@@ -12,7 +11,7 @@ namespace CSL1
 {
 
 	Simulation::Simulation()
-		: m_LowerBoundUnscaled(10), m_HigherBoundUnscaled(200), m_bRunning(false)
+		: m_LowerBoundUnscaled(10), m_HigherBoundUnscaled(200), m_bRunning(false), m_ElapsedTime(10000)
 	{
 		m_Processors = std::vector<Processor>(5);
 		m_SlowestProcessor = nullptr;
@@ -61,9 +60,17 @@ namespace CSL1
 
 		ImGui::Begin("Simulation Controls");
 
+		ImGui::SeparatorText("Status");
+
+		SimualationStatusOption();
+
+
 		ImGui::SeparatorText("Controls");
+
 		GenerateTasksOption();
-		FIFOSchedulerOption();
+		RunSchedulerOption([this]() { RunFIFOScheduler(); }, "FIFO", m_FifoState);
+		RunSchedulerOption([this]() { RunFIFOScheduler(); }, "Dedicated", m_DedicatedState);
+		RunSchedulerOption([this]() { RunFIFOScheduler(); }, "Interruptible", m_InterruptibleState);
 
 		ImGui::End();
 
@@ -74,11 +81,13 @@ namespace CSL1
 
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(5, 5));
 		ImGui::Begin("Simulation Output");
-		ImGui::Text("====================================");
-		ImGui::Text("OutPut");
-		ImGui::Text("====================================");
-		ImGui::End();
+		{
+			std::lock_guard<std::mutex> lock(m_SimulationResultsMutex);
+			OutputSimulationResults();
+		}
+
 		ImGui::PopStyleVar();
+		ImGui::End();
 	}
 
 
@@ -93,7 +102,56 @@ namespace CSL1
 	void Simulation::RunFIFOScheduler()
 	{
 		Schedulers::FIFO fifo;
-		fifo.Run(m_Processors, m_Tasks, 10000);
+		fifo.Run(m_Processors, m_Tasks, m_ElapsedTime);
+	}
+
+	void Simulation::RunDedicatedScheduler()
+	{
+
+	}
+
+	void Simulation::RunInterruptibleScheduler()
+	{
+
+	}
+
+	void Simulation::CalculateResults(const char* schedulerName)
+	{
+		std::vector<int32_t> processorTasks;
+
+		for (int i = 0; i < 5; i++)
+			processorTasks.push_back(m_Processors[i].Stats.CompletedTasks);
+
+		uint32_t completedTasks = 0;
+		for (auto& proc : m_Processors)
+			completedTasks += proc.Stats.CompletedTasks;
+
+		uint32_t completedOperations = 0;
+		for (auto& proc : m_Processors)
+			completedOperations += proc.Stats.CompletedOperations;
+
+		uint32_t potentialOperations = 0;
+		for (auto& proc : m_Processors)
+			potentialOperations += (proc.GetPower() * m_ElapsedTime);
+
+		float efficiency = static_cast<float>(completedOperations) / static_cast<float>(potentialOperations);
+
+		SimulationResult results = {
+			.OwningScheduler = schedulerName,
+			.CompletedTasks = (int32_t)completedTasks,
+			.ProcessorTasks = processorTasks,
+			.CompletedOperations = (int32_t)completedOperations,
+			.PotentialOperations = (int32_t)potentialOperations,
+			.Efficiency = efficiency
+		};
+
+		{
+			std::lock_guard<std::mutex> lock(m_SimulationResultsMutex);
+			m_SimulationResults.push_back(results);
+		}
+
+		for (auto& proc : m_Processors)
+			proc.Reset();
 	}
 
 	void Simulation::PowerOptions()
@@ -169,13 +227,27 @@ namespace CSL1
 		m_HigherBound = range[1];
 	}
 
+	void Simulation::SimualationStatusOption()
+	{
+		ImGui::BeginDisabled();
+		ImGui::Checkbox("Scheduler Running", &m_bRunning);
+		static int32_t tasksLeft = 0;
+		tasksLeft = m_Tasks.size();
+		ImGui::PushItemWidth(50);
+		ImGui::DragInt("Tasks Left", &tasksLeft);
+		ImGui::PopItemWidth();
+		ImGui::EndDisabled();
+		ImGui::PushItemWidth(100);
+		ImGui::SliderInt("Running Time", &m_ElapsedTime, 5000, 30000);
+		ImGui::PopItemWidth();
+	}
+
 	void Simulation::GenerateTasksOption()
 	{
-		ImGui::PushItemWidth(150);
 		static std::chrono::steady_clock::time_point clickTime;
 		static bool clicked = false;
 		static uint32_t tasksCount = 0;
-		if (ImGui::Button("Generate Tasks"))
+		if (ImGui::Button("Generate Tasks", ImVec2(150, 20)))
 		{
 			GenerateTasks();
 			tasksCount = m_Tasks.size();
@@ -195,63 +267,128 @@ namespace CSL1
 			}
 		}
 
-		ImGui::PopItemWidth();
 	}
 
-	void Simulation::FIFOSchedulerOption()
+	void Simulation::RunSchedulerOption(std::function<void()> schedulerFunction, const char* schedulerName, ShedulerButtonState& state)
 	{
-		ImGui::PushItemWidth(150);
-		static std::chrono::steady_clock::time_point clickTime;
-		static bool clickedSuccess = false;
-		static bool clickedFailure = false;
-		if (ImGui::Button("Run FIFO"))
+		ImGui::PushID(schedulerName);
+		if (ImGui::Button(("Run " + std::string(schedulerName)).c_str(), ImVec2(150, 20)))
 		{
+			state.ClickTime = std::chrono::steady_clock::now();
 			if (!m_bRunning)
 			{
-				std::thread([this]()
-							{
-								m_bRunning = true;
-								RunFIFOScheduler();
+				m_bRunning = true;
+				std::thread([=, this]()
+							{					
+								schedulerFunction();
+								CalculateResults(schedulerName);
 								m_bRunning = false;
 							}).detach();
-				clickedSuccess = true;
-				clickTime = std::chrono::steady_clock::now();
+				state.ClickedSuccess = true;
+				state.ClickedFailure = false;
 			}
 			else
 			{
-				
+				state.ClickedFailure = true;
+				state.ClickedSuccess = false;
 			}
 		}
-		if (clickedSuccess)
+		if (state.ClickedSuccess)
 		{
-			clickedFailure = false;
 			ImGui::SameLine();
-			ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.2f, 1.0f), "FIFO Scheduler Started");
+			ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.2f, 1.0f), "%s Scheduler Started", schedulerName);
 
 			long displayTime = 1;
-			auto elapsed = std::chrono::steady_clock::now() - clickTime;
+			auto elapsed = std::chrono::steady_clock::now() - state.ClickTime;
 			if (elapsed > std::chrono::seconds(displayTime))
 			{
-				clickedSuccess = false;
+				state.ClickedSuccess = false;
 			}
 		}
-		if (clickedFailure)
+		if (state.ClickedFailure)
 		{
-		   clickedSuccess = false;
-		   ImGui::SameLine();
-		   ImGui::TextColored(ImVec4(0.8f, 0.2f, 0.2f, 1.0f), "Failed To start");
+			ImGui::SameLine();
+			ImGui::TextColored(ImVec4(0.8f, 0.2f, 0.2f, 1.0f), "Failed To start %s", schedulerName);
 
-		   long displayTime = 1;
-		   auto elapsed = std::chrono::steady_clock::now() - clickTime;
-		   if (elapsed > std::chrono::seconds(displayTime))
-		   {
-			   clickedFailure = false;
-		   }
+			long displayTime = 1;
+			auto elapsed = std::chrono::steady_clock::now() - state.ClickTime;
+			if (elapsed > std::chrono::seconds(displayTime))
+			{
+				state.ClickedFailure = false;
+			}
+		}
+		ImGui::PopID();
+
+
+	}
+
+	void Simulation::OutputSimulationResults()
+	{
+		for (auto& res : m_SimulationResults)
+		{
+			char buffer[128];
+			snprintf(buffer, sizeof(buffer), "%s Scheduler", res.OwningScheduler);
+			ImGui::SeparatorText(buffer);
+
+			ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.0f, 0.8f, 0.2f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.2f, 0.2f, 0.2f, 1.f));
+			ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f, 5.0f));
+			ImGui::PushItemWidth(40);
+			ImGui::InputInt("Completed Tasks", &res.CompletedTasks, 0, 0, ImGuiInputTextFlags_ReadOnly);
+			ImGui::PopItemWidth();
+			ImGui::PopStyleVar(2);
+			ImGui::PopStyleColor(2);
+			ImGui::Separator();
+
+			for (int i = 0; i < res.ProcessorTasks.size(); ++i)
+			{
+				float progress = static_cast<float>(res.ProcessorTasks[i]) / static_cast<float>(res.CompletedTasks);
+				ImGui::ProgressBar(progress, ImVec2(200.0f, 22.0f), "");  // Display progress bar for each processor
+				ImGui::SameLine();
+				ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.0f, 0.8f, 0.2f, 1.0f));
+				ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.2f, 0.2f, 0.2f, 1.f));
+				ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+				ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f, 5.0f));
+				ImGui::PushItemWidth(40);
+				ImGui::InputInt("##CompletedP", &res.ProcessorTasks[i], 0, 0, ImGuiInputTextFlags_ReadOnly);
+				ImGui::PopItemWidth();
+				ImGui::PopStyleVar(2);
+				ImGui::PopStyleColor(2);
+				ImGui::SameLine();
+				ImGui::Text("Processor %d", i);
+
+				ImGui::Spacing();
+			}
+
+			// Theoretical and Real Operations
+			ImGui::Separator();
+			ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.0f, 0.8f, 0.2f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.2f, 0.2f, 0.2f, 1.f));
+			ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f, 5.0f));
+			ImGui::PushItemWidth(60);
+			ImGui::InputInt("##NumberT", &res.PotentialOperations, 0, 0, ImGuiInputTextFlags_ReadOnly);
+			ImGui::SameLine();
+			ImGui::Text("Best case operations");
+			ImGui::InputInt("##NumberR", &res.CompletedOperations, 0, 0, ImGuiInputTextFlags_ReadOnly);
+			ImGui::SameLine();
+			ImGui::Text("Completed operations");
+			ImGui::PopItemWidth();
+			ImGui::PopStyleVar(2);
+			ImGui::PopStyleColor(2);
+
+			// Display Efficiency as a nice progress bar
+			ImGui::Separator();
+			ImGui::ProgressBar(res.Efficiency, ImVec2(200.0f, 22.0f));
+			ImGui::SameLine();
+			ImGui::Text("Efficiency");
+			ImGui::SeparatorText("");
 		}
 
-		ImGui::Checkbox("IsRunning", &m_bRunning);
 
-		ImGui::PopItemWidth();
+
+
 	}
 
 }
