@@ -5,6 +5,7 @@
 #include <imgui.h>
 #include <string>
 #include <thread>
+#include <print>
 
 
 namespace CSL1
@@ -68,9 +69,9 @@ namespace CSL1
 		ImGui::SeparatorText("Controls");
 
 		GenerateTasksOption();
-		RunSchedulerOption([this]() { RunFIFOScheduler(); }, "FIFO", m_FifoState);
-		RunSchedulerOption([this]() { RunFIFOScheduler(); }, "Dedicated", m_DedicatedState);
-		RunSchedulerOption([this]() { RunFIFOScheduler(); }, "Interruptible", m_InterruptibleState);
+		RunSchedulerOption<Schedulers::FIFO>("FIFO", m_FifoState);
+		RunSchedulerOption<Schedulers::Dedicated>("Dedicated", m_DedicatedState);
+		RunSchedulerOption<Schedulers::Interruptible>("Interruptible", m_InterruptibleState);
 
 		ImGui::End();
 
@@ -99,21 +100,6 @@ namespace CSL1
 		m_Tasks = generator.GenerateTasks(m_TaskCount);
 	}
 
-	void Simulation::RunFIFOScheduler()
-	{
-		Schedulers::FIFO fifo;
-		fifo.Run(m_Processors, m_Tasks, m_ElapsedTime);
-	}
-
-	void Simulation::RunDedicatedScheduler()
-	{
-
-	}
-
-	void Simulation::RunInterruptibleScheduler()
-	{
-
-	}
 
 	void Simulation::CalculateResults(const char* schedulerName)
 	{
@@ -238,7 +224,7 @@ namespace CSL1
 		ImGui::PopItemWidth();
 		ImGui::EndDisabled();
 		ImGui::PushItemWidth(100);
-		ImGui::SliderInt("Running Time", &m_ElapsedTime, 5000, 30000);
+		ImGui::SliderInt("Running Time", &m_ElapsedTime, 5000, 300000);
 		ImGui::PopItemWidth();
 	}
 
@@ -269,58 +255,7 @@ namespace CSL1
 
 	}
 
-	void Simulation::RunSchedulerOption(std::function<void()> schedulerFunction, const char* schedulerName, ShedulerButtonState& state)
-	{
-		ImGui::PushID(schedulerName);
-		if (ImGui::Button(("Run " + std::string(schedulerName)).c_str(), ImVec2(150, 20)))
-		{
-			state.ClickTime = std::chrono::steady_clock::now();
-			if (!m_bRunning)
-			{
-				m_bRunning = true;
-				std::thread([=, this]()
-							{					
-								schedulerFunction();
-								CalculateResults(schedulerName);
-								m_bRunning = false;
-							}).detach();
-				state.ClickedSuccess = true;
-				state.ClickedFailure = false;
-			}
-			else
-			{
-				state.ClickedFailure = true;
-				state.ClickedSuccess = false;
-			}
-		}
-		if (state.ClickedSuccess)
-		{
-			ImGui::SameLine();
-			ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.2f, 1.0f), "%s Scheduler Started", schedulerName);
-
-			long displayTime = 1;
-			auto elapsed = std::chrono::steady_clock::now() - state.ClickTime;
-			if (elapsed > std::chrono::seconds(displayTime))
-			{
-				state.ClickedSuccess = false;
-			}
-		}
-		if (state.ClickedFailure)
-		{
-			ImGui::SameLine();
-			ImGui::TextColored(ImVec4(0.8f, 0.2f, 0.2f, 1.0f), "Failed To start %s", schedulerName);
-
-			long displayTime = 1;
-			auto elapsed = std::chrono::steady_clock::now() - state.ClickTime;
-			if (elapsed > std::chrono::seconds(displayTime))
-			{
-				state.ClickedFailure = false;
-			}
-		}
-		ImGui::PopID();
-
-
-	}
+	
 
 	void Simulation::OutputSimulationResults()
 	{
@@ -344,7 +279,7 @@ namespace CSL1
 			for (int i = 0; i < res.ProcessorTasks.size(); ++i)
 			{
 				float progress = static_cast<float>(res.ProcessorTasks[i]) / static_cast<float>(res.CompletedTasks);
-				ImGui::ProgressBar(progress, ImVec2(200.0f, 22.0f), "");  // Display progress bar for each processor
+				ImGui::ProgressBar(progress, ImVec2(200.0f, 22.0f), ""); 
 				ImGui::SameLine();
 				ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.0f, 0.8f, 0.2f, 1.0f));
 				ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.2f, 0.2f, 0.2f, 1.f));
@@ -361,7 +296,6 @@ namespace CSL1
 				ImGui::Spacing();
 			}
 
-			// Theoretical and Real Operations
 			ImGui::Separator();
 			ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.0f, 0.8f, 0.2f, 1.0f));
 			ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.2f, 0.2f, 0.2f, 1.f));
@@ -378,17 +312,12 @@ namespace CSL1
 			ImGui::PopStyleVar(2);
 			ImGui::PopStyleColor(2);
 
-			// Display Efficiency as a nice progress bar
 			ImGui::Separator();
 			ImGui::ProgressBar(res.Efficiency, ImVec2(200.0f, 22.0f));
 			ImGui::SameLine();
 			ImGui::Text("Efficiency");
 			ImGui::SeparatorText("");
 		}
-
-
-
-
 	}
 
 }

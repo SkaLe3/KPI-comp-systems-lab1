@@ -9,7 +9,7 @@ namespace CSL1
 		Task(const std::vector<uint32_t>& suiatableProcessors, uint32_t complexity);
 
 		std::vector<uint32_t>& GetProcessors();
-		uint32_t GetRemaining() const;
+		int32_t GetRemaining() const;
 		uint32_t GetComplexity() const;
 		bool Tick(uint32_t power);
 
@@ -17,6 +17,6 @@ namespace CSL1
 		uint32_t m_Complexity;
 		std::vector<uint32_t> m_Processors;
 		bool m_bCompleted;
-		uint32_t m_Remaining;
+		int32_t m_Remaining;
 	};
 }

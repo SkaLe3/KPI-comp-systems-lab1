@@ -4,6 +4,7 @@
 #include <functional>
 #include <chrono>
 #include <mutex>
+#include <imgui.h>
 
 
 namespace CSL1
@@ -38,10 +39,14 @@ namespace CSL1
 	private:
 		/* Logic */
 		void GenerateTasks();
-		void RunFIFOScheduler();
-		void RunDedicatedScheduler();
-		void RunInterruptibleScheduler();
 		void CalculateResults(const char* schedulerName);
+
+		template <typename T>
+		void RunScheduler()
+		{
+			T askedScheduler;
+			askedScheduler.Run(m_Processors, m_Tasks, m_ElapsedTime);
+		}
 
 	private:
 		/* GUI */
@@ -51,7 +56,8 @@ namespace CSL1
 		void ComplexityOptions();
 		void SimualationStatusOption();
 		void GenerateTasksOption();
-		void RunSchedulerOption(std::function<void()> schedulerFunction, const char* schedulerName, ShedulerButtonState& state);
+		template<typename T>
+		void RunSchedulerOption(const char* schedulerName, ShedulerButtonState& state);
 
 		void OutputSimulationResults();
 
@@ -76,4 +82,57 @@ namespace CSL1
 		ShedulerButtonState	m_DedicatedState;
 		ShedulerButtonState	m_InterruptibleState;
 	};
+
+	template<typename T>
+	void Simulation::RunSchedulerOption(const char* schedulerName, ShedulerButtonState& state)
+	{
+		ImGui::PushID(schedulerName);
+		if (ImGui::Button(("Run " + std::string(schedulerName)).c_str(), ImVec2(150, 20)))
+		{
+			state.ClickTime = std::chrono::steady_clock::now();
+			if (!m_bRunning)
+			{
+				m_bRunning = true;
+				std::thread([=, this]()
+							{
+								RunScheduler<T>();
+								CalculateResults(schedulerName);
+								m_bRunning = false;
+							}).detach();
+				state.ClickedSuccess = true;
+				state.ClickedFailure = false;
+			}
+			else
+			{
+				state.ClickedFailure = true;
+				state.ClickedSuccess = false;
+			}
+		}
+		if (state.ClickedSuccess)
+		{
+			ImGui::SameLine();
+			ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.2f, 1.0f), "%s Scheduler Started", schedulerName);
+
+			long displayTime = 1;
+			auto elapsed = std::chrono::steady_clock::now() - state.ClickTime;
+			if (elapsed > std::chrono::seconds(displayTime))
+			{
+				state.ClickedSuccess = false;
+			}
+		}
+		if (state.ClickedFailure)
+		{
+			ImGui::SameLine();
+			ImGui::TextColored(ImVec4(0.8f, 0.2f, 0.2f, 1.0f), "Failed To start %s", schedulerName);
+
+			long displayTime = 1;
+			auto elapsed = std::chrono::steady_clock::now() - state.ClickTime;
+			if (elapsed > std::chrono::seconds(displayTime))
+			{
+				state.ClickedFailure = false;
+			}
+		}
+		ImGui::PopID();
+	}
+
 }

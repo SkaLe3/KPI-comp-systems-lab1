@@ -14,7 +14,7 @@ namespace CSL1
 		return m_Processors;
 	}
 
-	uint32_t Task::GetRemaining() const
+	int32_t Task::GetRemaining() const
 	{
 		return m_Remaining;
 	}

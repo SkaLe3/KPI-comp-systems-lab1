@@ -19,12 +19,14 @@ namespace CSL1
 
 		class Dedicated
 		{
-
+		public:
+			void Run(std::vector<Processor>& processors, std::vector<Task>& tasks, uint32_t timeLeft){}
 		};
 
 		class Interruptible
 		{
-			
+		public:
+			void Run(std::vector<Processor>& processors, std::vector<Task>& tasks, uint32_t timeLeft){}
 		};
 	}
 }
